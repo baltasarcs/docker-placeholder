@@ -1,0 +1,95 @@
+version: '3.8'
+services:
+
+  nginx:
+    container_name: nginx
+    image: nginx:stable
+    #build:
+    #  context: ./nginx
+    #  network: host
+    #  args:
+    #    - CERTBOT_EMAIL=myemail@mycompany.com #replace with your own email
+    #    - DOMAIN_LIST=mycompany.com,api.mycompany.com,www.mycompany.com #replace with your own domains separated by ,
+    restart: always
+    volumes:
+      - ../:/var/www/placeholder/
+    # - .empty:/var/www/placeholder/docker
+      - ./nginx/sites/:/etc/nginx/conf.d/
+      - ./nginx/log/:/var/log/nginx/
+    #  - ./letsencrypt:/etc/letsencrypt
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - docker-network
+
+  phpapi:
+    container_name: phpapi
+    image: php8fpm
+    build:
+      args:
+        user: ${CONTAINER_USER}
+        uid: 1000
+      context: ./php
+      dockerfile: php8.dockerfile
+    restart: unless-stopped
+    volumes:
+      - ../:/var/www/placeholder
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    depends_on:
+      - nginx
+      - postgres
+      - redis
+    links:
+      - postgres
+      - redis
+    networks:
+      - docker-network
+
+  app:
+    container_name: app
+    image: adminlteiimage
+    build:
+      context: ../frontend
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../frontend:/var/www/placeholder/frontend
+    depends_on:
+      - nginx
+      - phpapi
+    networks:
+      - docker-network
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: ./postgres/data
+    #volumes:
+    #   - ./postgres/data:/data/postgres
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - docker-network
+
+  redis:
+    container_name: redis
+    image: redis:latest
+    restart: always
+    ports:
+      - "6379:6379"
+    #volumes:
+    #  - ./redis/data:/data
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    hostname: redis
+    networks:
+      - docker-network
+
+networks:
+  docker-network:
+    driver: bridge

@@ -1,0 +1,4 @@
+/postgres/data
+/redis/data
+/nginx/log
+.env
